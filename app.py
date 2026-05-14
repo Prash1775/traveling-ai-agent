@@ -148,7 +148,7 @@ Remaining     : ₹{budget_report["remaining"]:,}
 {ai_content}
 
 ====================================
-🤖 POWERED BY OLLAMA AI
+🤖 POWERED BY GOOGLE GEMINI & GROQ
 ====================================
 """
 

@@ -1,7 +1,7 @@
 gradio
 requests
 google-generativeai
-ollama
+groq
 fpdf
 folium
 geopy
