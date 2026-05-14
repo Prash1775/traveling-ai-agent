@@ -1,0 +1,590 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Traveling AI Agent</title>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <style>
+    :root {
+      --primary: #2563eb;
+      --primary-dark: #1d4ed8;
+      --green: #059669;
+      --amber: #f59e0b;
+      --bg: #f1f5f9;
+      --surface: #ffffff;
+      --text: #1e293b;
+      --muted: #64748b;
+      --border: #e2e8f0;
+      --radius: 12px;
+      --shadow: 0 1px 3px rgba(0,0,0,0.1), 0 1px 2px rgba(0,0,0,0.06);
+      --shadow-md: 0 4px 6px -1px rgba(0,0,0,0.1), 0 2px 4px -1px rgba(0,0,0,0.06);
+    }
+
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+    }
+
+    /* ── Header ── */
+    .header {
+      background: linear-gradient(135deg, #0f2027 0%, #203a43 40%, #2c5364 100%);
+      padding: 2.5rem 1rem 2rem;
+      text-align: center;
+      color: white;
+    }
+    .header-globe { font-size: 3rem; margin-bottom: 0.5rem; }
+    .header h1 { font-size: 2.2rem; font-weight: 700; letter-spacing: -0.5px; }
+    .header p { font-size: 1rem; opacity: 0.75; margin-top: 0.35rem; }
+    .header-pills {
+      display: flex; justify-content: center; flex-wrap: wrap;
+      gap: 0.5rem; margin-top: 1.25rem;
+    }
+    .pill {
+      background: rgba(255,255,255,0.12);
+      border: 1px solid rgba(255,255,255,0.2);
+      padding: 0.3rem 0.8rem; border-radius: 20px;
+      font-size: 0.8rem; backdrop-filter: blur(4px);
+    }
+
+    /* ── Tabs ── */
+    .tabs {
+      display: flex; background: var(--surface);
+      border-bottom: 2px solid var(--border);
+      position: sticky; top: 0; z-index: 50;
+      box-shadow: var(--shadow);
+    }
+    .tab-btn {
+      padding: 0.9rem 1.5rem; background: none; border: none;
+      cursor: pointer; font-size: 0.95rem; font-weight: 500;
+      color: var(--muted); border-bottom: 3px solid transparent;
+      margin-bottom: -2px; transition: color 0.15s, border-color 0.15s;
+    }
+    .tab-btn.active { color: var(--primary); border-bottom-color: var(--primary); }
+    .tab-btn:hover:not(.active) { color: var(--text); }
+
+    /* ── Layout ── */
+    .container { max-width: 900px; margin: 2rem auto; padding: 0 1rem; }
+    .tab-content { display: none; }
+    .tab-content.active { display: block; }
+
+    /* ── Cards ── */
+    .card {
+      background: var(--surface); border-radius: var(--radius);
+      padding: 1.5rem; margin-bottom: 1.5rem;
+      box-shadow: var(--shadow); border: 1px solid var(--border);
+    }
+    .card-title {
+      font-size: 1rem; font-weight: 600; margin-bottom: 1.25rem;
+      color: var(--text); display: flex; align-items: center; gap: 0.5rem;
+    }
+
+    /* ── Form ── */
+    .form-grid { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 1rem; }
+    .form-group { display: flex; flex-direction: column; gap: 0.35rem; }
+    .form-group.full { grid-column: 1 / -1; }
+    .form-group.half { grid-column: span 2; }
+
+    label { font-size: 0.8rem; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: 0.04em; }
+
+    input[type="text"], input[type="number"] {
+      padding: 0.6rem 0.8rem; border: 1.5px solid var(--border);
+      border-radius: 8px; font-size: 0.9rem; color: var(--text);
+      background: var(--bg); transition: border-color 0.15s, background 0.15s;
+      outline: none; width: 100%;
+    }
+    input[type="text"]:focus, input[type="number"]:focus {
+      border-color: var(--primary); background: white;
+    }
+
+    .range-row { display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.35rem; }
+    .range-val { font-weight: 700; color: var(--primary); font-size: 1.1rem; }
+    input[type="range"] {
+      width: 100%; height: 6px; cursor: pointer; accent-color: var(--primary);
+    }
+
+    /* ── Buttons ── */
+    .btn-row { display: flex; gap: 0.75rem; margin-top: 1.25rem; flex-wrap: wrap; }
+    .btn {
+      padding: 0.65rem 1.25rem; border-radius: 8px; border: none;
+      cursor: pointer; font-size: 0.9rem; font-weight: 600;
+      transition: all 0.15s; display: inline-flex; align-items: center; gap: 0.4rem;
+    }
+    .btn-primary { background: var(--primary); color: white; flex: 2; justify-content: center; }
+    .btn-primary:hover:not(:disabled) { background: var(--primary-dark); transform: translateY(-1px); box-shadow: var(--shadow-md); }
+    .btn-outline {
+      background: white; color: var(--text);
+      border: 1.5px solid var(--border); flex: 1; justify-content: center;
+    }
+    .btn-outline:hover:not(:disabled) { background: var(--bg); }
+    .btn:disabled { opacity: 0.5; cursor: not-allowed; transform: none !important; }
+
+    /* ── Loading ── */
+    .loader { display: none; text-align: center; padding: 2.5rem 1rem; }
+    .loader.on { display: block; }
+    .spinner {
+      width: 2.5rem; height: 2.5rem;
+      border: 3px solid var(--border); border-top-color: var(--primary);
+      border-radius: 50%; animation: spin 0.75s linear infinite;
+      margin: 0 auto 1rem;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .loader p { color: var(--muted); font-size: 0.95rem; }
+
+    /* ── Results ── */
+    .results { display: none; }
+    .results.on { display: block; }
+
+    .summary-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; }
+
+    .info-tile {
+      background: var(--bg); border-radius: 8px;
+      padding: 1rem; border: 1px solid var(--border);
+    }
+    .info-tile .label { font-size: 0.72rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); margin-bottom: 0.35rem; }
+    .info-tile .value { font-size: 1.2rem; font-weight: 700; color: var(--text); }
+    .info-tile .sub { font-size: 0.78rem; color: var(--muted); margin-top: 0.2rem; }
+
+    .budget-banner {
+      background: linear-gradient(135deg, var(--green), #047857);
+      color: white; border-radius: 8px; padding: 1.25rem;
+      grid-column: 1 / -1;
+    }
+    .budget-banner .label { font-size: 0.72rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; opacity: 0.75; margin-bottom: 0.75rem; }
+    .budget-cols { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 0.5rem; }
+    .budget-col { text-align: center; }
+    .budget-col .amount { font-size: 1.15rem; font-weight: 700; }
+    .budget-col .name { font-size: 0.72rem; opacity: 0.8; margin-top: 0.2rem; }
+
+    .ai-block {
+      white-space: pre-wrap; font-size: 0.88rem; line-height: 1.75;
+      color: var(--text); background: var(--bg);
+      border-radius: 8px; padding: 1.25rem;
+      border: 1px solid var(--border); max-height: 500px; overflow-y: auto;
+    }
+
+    #map { height: 360px; border-radius: 8px; border: 1px solid var(--border); }
+    #map-card { display: none; }
+
+    /* ── Chat ── */
+    .chat-window {
+      height: 440px; overflow-y: auto;
+      background: var(--bg); border-radius: 8px;
+      border: 1px solid var(--border);
+      padding: 1rem; display: flex; flex-direction: column; gap: 0.75rem;
+      margin-bottom: 0.75rem;
+    }
+    .msg {
+      max-width: 78%; padding: 0.7rem 1rem;
+      border-radius: 14px; font-size: 0.9rem; line-height: 1.55;
+    }
+    .msg.user { background: var(--primary); color: white; align-self: flex-end; border-bottom-right-radius: 4px; }
+    .msg.ai { background: white; color: var(--text); align-self: flex-start; border: 1px solid var(--border); border-bottom-left-radius: 4px; }
+    .msg.thinking { opacity: 0.6; font-style: italic; }
+
+    .chat-input-row { display: flex; gap: 0.75rem; }
+    .chat-field {
+      flex: 1; padding: 0.7rem 1rem;
+      border: 1.5px solid var(--border); border-radius: 10px;
+      font-size: 0.9rem; outline: none;
+      transition: border-color 0.15s;
+    }
+    .chat-field:focus { border-color: var(--primary); }
+
+    /* ── Responsive ── */
+    @media (max-width: 620px) {
+      .form-grid { grid-template-columns: 1fr; }
+      .form-group.half { grid-column: unset; }
+      .summary-grid { grid-template-columns: 1fr; }
+      .budget-cols { grid-template-columns: 1fr; }
+      .header h1 { font-size: 1.6rem; }
+    }
+  </style>
+</head>
+<body>
+
+<!-- Header -->
+<div class="header">
+  <div class="header-globe">🌍</div>
+  <h1>Traveling AI Agent</h1>
+  <p>AI-Powered Smart Travel Planner</p>
+  <div class="header-pills">
+    <span class="pill">✈️ Flights</span>
+    <span class="pill">🏨 Hotels</span>
+    <span class="pill">🌦️ Weather</span>
+    <span class="pill">💰 Budget</span>
+    <span class="pill">🧠 AI Itinerary</span>
+  </div>
+</div>
+
+<!-- Tabs -->
+<div class="tabs">
+  <button class="tab-btn active" data-tab="planner">✈️ Travel Planner</button>
+  <button class="tab-btn" data-tab="chatbot">🤖 AI Chatbot</button>
+</div>
+
+<div class="container">
+
+  <!-- ── Travel Planner Tab ── -->
+  <div id="planner-tab" class="tab-content active">
+
+    <div class="card">
+      <div class="card-title">📋 Plan Your Trip</div>
+      <div class="form-grid">
+        <div class="form-group">
+          <label>👤 Username</label>
+          <input type="text" id="username" placeholder="Your name">
+        </div>
+        <div class="form-group">
+          <label>🛫 Source City</label>
+          <input type="text" id="source" placeholder="e.g. Mumbai">
+        </div>
+        <div class="form-group">
+          <label>📍 Destination City</label>
+          <input type="text" id="destination" placeholder="e.g. Goa">
+        </div>
+
+        <div class="form-group">
+          <div class="range-row">
+            <label>📅 Days</label>
+            <span class="range-val" id="days-val">3</span>
+          </div>
+          <input type="range" id="days" min="1" max="15" value="3"
+                 oninput="document.getElementById('days-val').textContent=this.value">
+        </div>
+
+        <div class="form-group">
+          <label>💰 Budget (₹)</label>
+          <input type="number" id="budget" value="20000" min="1000">
+        </div>
+
+        <div class="form-group full">
+          <label>🎯 Interests</label>
+          <input type="text" id="interests" placeholder="e.g. beaches, food, adventure, culture">
+        </div>
+      </div>
+
+      <div class="btn-row">
+        <button class="btn btn-primary" id="gen-btn" onclick="generatePlan()">
+          🚀 Generate Travel Plan
+        </button>
+        <button class="btn btn-outline" id="dl-btn" onclick="downloadPlan()" disabled>
+          📄 Download
+        </button>
+        <button class="btn btn-outline" id="map-btn" onclick="toggleMap()" disabled>
+          🗺️ Map
+        </button>
+      </div>
+    </div>
+
+    <!-- Loading -->
+    <div class="loader" id="loader">
+      <div class="spinner"></div>
+      <p>Generating your personalized travel plan with AI…</p>
+    </div>
+
+    <!-- Results -->
+    <div class="results" id="results">
+
+      <div class="card">
+        <div class="card-title">📊 Trip Summary</div>
+        <div class="summary-grid">
+          <div class="info-tile">
+            <div class="label">🌦️ Weather</div>
+            <div class="value" id="r-weather">—</div>
+          </div>
+          <div class="info-tile">
+            <div class="label">📅 Duration</div>
+            <div class="value" id="r-days">—</div>
+          </div>
+          <div class="info-tile">
+            <div class="label">✈️ Best Flight</div>
+            <div class="value" id="r-airline">—</div>
+            <div class="sub" id="r-flight-sub">—</div>
+          </div>
+          <div class="info-tile">
+            <div class="label">🏨 Top Hotel</div>
+            <div class="value" id="r-hotel">—</div>
+            <div class="sub" id="r-hotel-sub">—</div>
+          </div>
+          <div class="budget-banner">
+            <div class="label">💰 Budget Overview</div>
+            <div class="budget-cols">
+              <div class="budget-col">
+                <div class="amount" id="r-total">—</div>
+                <div class="name">Total Budget</div>
+              </div>
+              <div class="budget-col">
+                <div class="amount" id="r-expense">—</div>
+                <div class="name">Total Expense</div>
+              </div>
+              <div class="budget-col">
+                <div class="amount" id="r-remaining">—</div>
+                <div class="name">Remaining</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-title">🤖 AI Travel Guide</div>
+        <div class="ai-block" id="r-ai">—</div>
+      </div>
+
+      <div class="card" id="map-card">
+        <div class="card-title">🗺️ Destination Map</div>
+        <div id="map"></div>
+      </div>
+
+    </div><!-- /results -->
+  </div><!-- /planner-tab -->
+
+  <!-- ── Chatbot Tab ── -->
+  <div id="chatbot-tab" class="tab-content">
+    <div class="card">
+      <div class="card-title">🤖 AI Travel Chatbot</div>
+      <div class="chat-window" id="chat-window">
+        <div class="msg ai">
+          👋 Hi! I'm your AI travel assistant. Ask me anything about destinations, tips, itineraries, or travel advice!
+        </div>
+      </div>
+      <div class="chat-input-row">
+        <input class="chat-field" id="chat-input" type="text"
+               placeholder="Ask about travel…"
+               onkeydown="if(event.key==='Enter')sendMsg()">
+        <button class="btn btn-primary" id="send-btn" onclick="sendMsg()">Send</button>
+      </div>
+      <div style="margin-top:0.75rem">
+        <button class="btn btn-outline" onclick="clearChat()">🗑️ Clear Chat</button>
+      </div>
+    </div>
+  </div>
+
+</div><!-- /container -->
+
+<script>
+  // ── Tab navigation ──────────────────────────────────────────────
+  document.querySelectorAll('.tab-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'))
+      document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'))
+      btn.classList.add('active')
+      document.getElementById(btn.dataset.tab + '-tab').classList.add('active')
+    })
+  })
+
+  // ── Helpers ─────────────────────────────────────────────────────
+  const fmt = n => '₹' + Number(n).toLocaleString('en-IN')
+
+  let plan = null
+  let mapInst = null
+  let mapReady = false
+
+  // ── Generate Plan ───────────────────────────────────────────────
+  async function generatePlan() {
+    const source = document.getElementById('source').value.trim()
+    const destination = document.getElementById('destination').value.trim()
+    if (!source || !destination) {
+      alert('Please enter both Source and Destination cities.')
+      return
+    }
+    const payload = {
+      username: document.getElementById('username').value.trim(),
+      source,
+      destination,
+      days: document.getElementById('days').value,
+      budget: parseInt(document.getElementById('budget').value) || 20000,
+      interests: document.getElementById('interests').value.trim() || 'general sightseeing',
+    }
+
+    document.getElementById('gen-btn').disabled = true
+    document.getElementById('loader').classList.add('on')
+    document.getElementById('results').classList.remove('on')
+    document.getElementById('map-card').style.display = 'none'
+    mapReady = false
+
+    try {
+      const res = await fetch('/api/travel-plan', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      })
+      if (!res.ok) {
+        const err = await res.json()
+        throw new Error(err.error || 'Failed to generate plan.')
+      }
+      plan = await res.json()
+      showResults(plan)
+    } catch (e) {
+      alert('Error: ' + e.message)
+    } finally {
+      document.getElementById('gen-btn').disabled = false
+      document.getElementById('loader').classList.remove('on')
+    }
+  }
+
+  function showResults(p) {
+    document.getElementById('r-weather').textContent = p.weather
+    document.getElementById('r-days').textContent = `${p.days} Day${p.days > 1 ? 's' : ''}`
+    document.getElementById('r-airline').textContent = p.flight.airline
+    document.getElementById('r-flight-sub').textContent = `${p.flight.time} · ${fmt(p.flight.price)}`
+    document.getElementById('r-hotel').textContent = p.hotel.name
+    document.getElementById('r-hotel-sub').textContent = `${p.hotel.stars}★ · ${fmt(p.hotel.price_per_night)}/night`
+    document.getElementById('r-total').textContent = fmt(p.budget)
+    document.getElementById('r-expense').textContent = fmt(p.budget_report.expense)
+    document.getElementById('r-remaining').textContent = fmt(p.budget_report.remaining)
+    document.getElementById('r-ai').textContent = p.ai_content
+
+    document.getElementById('results').classList.add('on')
+    document.getElementById('dl-btn').disabled = false
+    document.getElementById('map-btn').disabled = false
+
+    document.getElementById('results').scrollIntoView({ behavior: 'smooth', block: 'start' })
+  }
+
+  // ── Download ────────────────────────────────────────────────────
+  function downloadPlan() {
+    if (!plan) return
+    const p = plan
+    const txt = [
+      '====================================',
+      '    TRAVELING AI AGENT',
+      '====================================',
+      '',
+      `Destination : ${p.destination}`,
+      `Source      : ${p.source}`,
+      `Duration    : ${p.days} Days`,
+      '',
+      '====================================',
+      '    WEATHER',
+      '====================================',
+      p.weather,
+      '',
+      '====================================',
+      '    FLIGHT DETAILS',
+      '====================================',
+      `Airline : ${p.flight.airline}`,
+      `Price   : ${fmt(p.flight.price)}`,
+      `Time    : ${p.flight.time}`,
+      '',
+      '====================================',
+      '    HOTEL DETAILS',
+      '====================================',
+      `Hotel            : ${p.hotel.name}`,
+      `Cost Per Night   : ${fmt(p.hotel.price_per_night)}`,
+      `Total Hotel Cost : ${fmt(p.hotel.price_per_night * p.days)}`,
+      '',
+      '====================================',
+      '    BUDGET REPORT',
+      '====================================',
+      `Total Budget  : ${fmt(p.budget)}`,
+      `Total Expense : ${fmt(p.budget_report.expense)}`,
+      `Remaining     : ${fmt(p.budget_report.remaining)}`,
+      '',
+      '====================================',
+      '    AI TRAVEL GUIDE',
+      '====================================',
+      p.ai_content,
+    ].join('\n')
+
+    const blob = new Blob([txt], { type: 'text/plain;charset=utf-8' })
+    const url = URL.createObjectURL(blob)
+    const a = Object.assign(document.createElement('a'), {
+      href: url,
+      download: `travel-plan-${p.destination.toLowerCase().replace(/\s+/g, '-')}.txt`,
+    })
+    document.body.appendChild(a)
+    a.click()
+    document.body.removeChild(a)
+    URL.revokeObjectURL(url)
+  }
+
+  // ── Map ─────────────────────────────────────────────────────────
+  async function toggleMap() {
+    if (!plan) return
+    const card = document.getElementById('map-card')
+    card.style.display = 'block'
+    card.scrollIntoView({ behavior: 'smooth', block: 'start' })
+
+    if (mapReady) return
+    mapReady = true
+
+    if (!mapInst) {
+      mapInst = L.map('map').setView([20, 78], 5)
+      L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        attribution: '&copy; OpenStreetMap contributors',
+      }).addTo(mapInst)
+    }
+
+    try {
+      const res = await fetch(
+        `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(plan.destination)}&format=json&limit=1`,
+        { headers: { 'Accept-Language': 'en' } }
+      )
+      const data = await res.json()
+      if (data.length > 0) {
+        const lat = parseFloat(data[0].lat)
+        const lon = parseFloat(data[0].lon)
+        mapInst.setView([lat, lon], 12)
+        L.marker([lat, lon]).addTo(mapInst).bindPopup(`<b>${plan.destination}</b>`).openPopup()
+      }
+    } catch (e) {
+      console.error('Geocoding error:', e)
+    }
+  }
+
+  // ── Chatbot ─────────────────────────────────────────────────────
+  function appendMsg(role, text, thinking = false) {
+    const win = document.getElementById('chat-window')
+    const div = document.createElement('div')
+    div.className = `msg ${role}${thinking ? ' thinking' : ''}`
+    div.textContent = text
+    win.appendChild(div)
+    win.scrollTop = win.scrollHeight
+    return div
+  }
+
+  async function sendMsg() {
+    const input = document.getElementById('chat-input')
+    const msg = input.value.trim()
+    if (!msg) return
+
+    appendMsg('user', msg)
+    input.value = ''
+    document.getElementById('send-btn').disabled = true
+
+    const thinking = appendMsg('ai', '⏳ Thinking…', true)
+
+    try {
+      const res = await fetch('/api/chatbot', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ message: msg }),
+      })
+      const data = await res.json()
+      thinking.remove()
+      appendMsg('ai', data.response || 'Sorry, I could not process that.')
+    } catch {
+      thinking.remove()
+      appendMsg('ai', 'Error: Could not reach the AI assistant.')
+    } finally {
+      document.getElementById('send-btn').disabled = false
+      input.focus()
+    }
+  }
+
+  function clearChat() {
+    document.getElementById('chat-window').innerHTML = `
+      <div class="msg ai">
+        👋 Hi! I'm your AI travel assistant. Ask me anything about destinations, tips, itineraries, or travel advice!
+      </div>`
+  }
+</script>
+</body>
+</html>
