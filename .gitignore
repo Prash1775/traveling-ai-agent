@@ -1,0 +1,23 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+venv/
+.venv/
+env/
+build/
+dist/
+*.egg-info/
+
+# Local data & logs
+agents/memory/*.json
+travel_plan.pdf
+travel_map.html
+*.log
+
+# OS
+.DS_Store
+Thumbs.db
+
+# API Keys (IMPORTANT: Do not upload your real keys!)
+utils/api_keys.py

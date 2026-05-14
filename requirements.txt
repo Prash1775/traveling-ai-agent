@@ -1,0 +1,7 @@
+gradio
+requests
+google-generativeai
+ollama
+fpdf
+folium
+geopy
