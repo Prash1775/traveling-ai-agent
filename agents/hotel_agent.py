@@ -1,6 +1,10 @@
 import requests
+import os
 
-from utils.api_keys import RAPID_API_KEY
+try:
+    from utils.api_keys import RAPID_API_KEY
+except ImportError:
+    RAPID_API_KEY = os.getenv("RAPID_API_KEY")
 
 # FAST MOCK FALLBACK
 MOCK_HOTELS = [

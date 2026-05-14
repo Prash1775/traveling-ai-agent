@@ -1,7 +1,11 @@
 import requests
 import random
+import os
 
-from utils.api_keys import AVIATIONSTACK_API_KEY
+try:
+    from utils.api_keys import AVIATIONSTACK_API_KEY
+except ImportError:
+    AVIATIONSTACK_API_KEY = os.getenv("AVIATIONSTACK_API_KEY")
 
 # FAST FALLBACK FLIGHTS
 MOCK_FLIGHTS = [

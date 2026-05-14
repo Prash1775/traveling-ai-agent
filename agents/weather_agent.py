@@ -1,6 +1,10 @@
 import requests
+import os
 
-from utils.api_keys import WEATHER_API_KEY
+try:
+    from utils.api_keys import WEATHER_API_KEY
+except ImportError:
+    WEATHER_API_KEY = os.getenv("WEATHER_API_KEY")
 
 def get_weather(city):
 

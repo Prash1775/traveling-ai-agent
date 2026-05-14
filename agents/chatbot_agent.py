@@ -1,6 +1,10 @@
 from groq import Groq
+import os
 
-from utils.api_keys import GROQ_API_KEY
+try:
+    from utils.api_keys import GROQ_API_KEY
+except ImportError:
+    GROQ_API_KEY = os.getenv("GROQ_API_KEY")
 
 client = Groq(
     api_key=GROQ_API_KEY

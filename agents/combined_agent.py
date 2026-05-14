@@ -1,5 +1,10 @@
 from groq import Groq
-from utils.api_keys import GROQ_API_KEY
+import os
+
+try:
+    from utils.api_keys import GROQ_API_KEY
+except ImportError:
+    GROQ_API_KEY = os.getenv("GROQ_API_KEY")
 
 def get_combined_travel_data(destination, days, interests):
     """Get both recommendations and itinerary using Groq API (High Performance)."""
