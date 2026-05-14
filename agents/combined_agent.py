@@ -1,15 +1,14 @@
-import google.generativeai as genai
-from utils.api_keys import GEMINI_API_KEY
+from groq import Groq
+from utils.api_keys import GROQ_API_KEY
 
 def get_combined_travel_data(destination, days, interests):
-    """Get both recommendations and itinerary using Gemini API (Cloud Ready)."""
+    """Get both recommendations and itinerary using Groq API (High Performance)."""
     
-    if not GEMINI_API_KEY or "AIza" not in GEMINI_API_KEY:
-        return "AI Error: Valid Gemini API Key not found. Please set it in utils/api_keys.py"
+    if not GROQ_API_KEY or "gsk" not in GROQ_API_KEY:
+        return "AI Error: Valid Groq API Key not found. Please set it in utils/api_keys.py"
 
     try:
-        genai.configure(api_key=GEMINI_API_KEY)
-        model = genai.GenerativeModel('gemini-1.5-flash')
+        client = Groq(api_key=GROQ_API_KEY)
 
         prompt = f"""
         You are an expert travel guide. Create a complete travel plan for {destination} for {days} days.
@@ -32,8 +31,11 @@ def get_combined_travel_data(destination, days, interests):
         Keep the tone professional and helpful.
         """
 
-        response = model.generate_content(prompt)
-        return response.text
+        response = client.chat.completions.create(
+            model="llama-3.3-70b-versatile",
+            messages=[{"role": "user", "content": prompt}]
+        )
+        return response.choices[0].message.content
 
     except Exception as e:
-        return f"Gemini API Error: {str(e)}"
+        return f"Groq API Error: {str(e)}"
