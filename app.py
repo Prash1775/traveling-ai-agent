@@ -174,7 +174,10 @@ with tab1:
 
                 if map_obj:
                     st.divider()
-                    st_folium(map_obj, width=None, height=500, returned_objects=[])
+                    st.markdown("#### 🗺️ Interactive Destination Map")
+                    # The most reliable way to show folium on cloud:
+                    map_html = map_obj._repr_html_()
+                    st.components.v1.html(map_html, height=500, scrolling=True)
 
 # ============================================
 # TAB 2: CHATBOT
