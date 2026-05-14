@@ -1,3 +1,4 @@
+streamlit
 gradio
 requests
 google-generativeai
@@ -5,3 +6,4 @@ groq
 fpdf
 folium
 geopy
+streamlit-folium

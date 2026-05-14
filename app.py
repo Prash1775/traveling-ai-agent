@@ -1,5 +1,7 @@
-import gradio as gr
+import streamlit as st
 import asyncio
+import os
+from streamlit_folium import st_folium
 
 from agents.chatbot_agent import ask_ai
 from agents.weather_agent import get_weather
@@ -12,380 +14,228 @@ from agents.map_agent import generate_map
 from agents.memory_agent import save_memory, load_memory
 
 # ============================================
-# MAIN TRAVEL PLANNER FUNCTION
+# PAGE CONFIG
+# ============================================
+st.set_page_config(
+    page_title="Traveling AI Agent",
+    page_icon="🌍",
+    layout="wide",
+    initial_sidebar_state="expanded",
+)
+
+# ============================================
+# STYLING
+# ============================================
+st.markdown("""
+    <style>
+    .main {
+        background-color: #0e1117;
+    }
+    .stButton>button {
+        width: 100%;
+        border-radius: 10px;
+        height: 3em;
+        background-color: #4CAF50;
+        color: white;
+        font-weight: bold;
+    }
+    .stTextInput>div>div>input {
+        border-radius: 10px;
+    }
+    .report-card {
+        padding: 20px;
+        border-radius: 15px;
+        background-color: #1e2130;
+        border: 1px solid #3e4259;
+    }
+    </style>
+    """, unsafe_allow_html=True)
+
+# ============================================
+# HELPER FUNCTIONS
 # ============================================
 
-async def travel_planner(
-    username,
-    source,
-    destination,
-    days,
-    budget,
-    interests
-):
-    save_memory(
-        username,
-        {
-            "destination": destination,
-            "interests": interests,
-            "budget": budget
-        }
-    ) 
-    memory = load_memory(username)
-
-    if not source or not destination:
-        return "⚠️ Please enter both Source and Destination."
-
-    # START PARALLEL AGENT REQUESTS
+async def get_travel_data(source, destination, days, interests):
     tasks = [
-        asyncio.to_thread(get_weather, destination),                     # Sync -> Thread
-        asyncio.to_thread(search_hotels, destination),                   # Sync -> Thread
-        asyncio.to_thread(search_flights, source, destination),          # Sync -> Thread
-        asyncio.to_thread(get_combined_travel_data, destination, int(days), interests) # Combined AI Call
+        asyncio.to_thread(get_weather, destination),
+        asyncio.to_thread(search_hotels, destination),
+        asyncio.to_thread(search_flights, source, destination),
+        asyncio.to_thread(get_combined_travel_data, destination, days, interests)
     ]
+    return await asyncio.gather(*tasks, return_exceptions=True)
 
-    # Gather all results
-    results = await asyncio.gather(*tasks, return_exceptions=True)
-
-    weather = results[0] if not isinstance(results[0], Exception) else "Weather unavailable"
-    hotels = results[1] if not isinstance(results[1], Exception) else []
-    flights = results[2] if not isinstance(results[2], Exception) else []
-    ai_content = results[3] if not isinstance(results[3], Exception) else "No travel details available"
-
-    # ============================================
-    # HOTEL DETAILS
-    # ============================================
-
-    hotel_name = "Hotel Not Found"
-    hotel_cost = 0
-
+# ============================================
+# SIDEBAR
+# ============================================
+with st.sidebar:
+    st.image("https://img.icons8.com/clouds/200/travel-pro.png")
+    st.title("Settings")
+    username = st.text_input("👤 Username", placeholder="Enter your name", value="Traveler")
+    source = st.text_input("🛫 Source City", placeholder="e.g. Mumbai")
+    destination = st.text_input("📍 Destination City", placeholder="e.g. Goa")
+    
+    st.divider()
+    days = st.slider("📅 Number of Days", 1, 15, 3)
+    budget_input = st.text_input("💰 Total Budget (₹)", value="20000")
     try:
-        if hotels and len(hotels) > 0:
-            hotel = hotels[0]
-            hotel_name = hotel.get("name", "Hotel Not Found")
-            hotel_cost = hotel.get("price_per_night", 5000)
-    except Exception:
-        pass
-
-    # ============================================
-    # FLIGHT DETAILS
-    # ============================================
-
-    flight_airline = "N/A"
-    flight_price = 0
-    flight_time = "N/A"
-
-    try:
-        if flights and len(flights) > 0:
-            flight = flights[0]
-            flight_airline = flight.get("airline", "N/A")
-            flight_price = flight.get("price", 0)
-            flight_time = flight.get("time", "N/A")
-    except Exception:
-        pass
-
-    # ============================================
-    # BUDGET
-    # ============================================
-
-    budget_report = calculate_budget(
-        budget,
-        hotel_cost * int(days),
-        flight_price
-    )
-
-    # ============================================
-    # FINAL RESULT
-    # ============================================
-
-    result = f"""
-====================================
-🌍 TRAVELING AI AGENT
-====================================
-
-📍 Destination : {destination}
-
-🛫 Source      : {source}
-
-📅 Duration    : {int(days)} Days
-
-====================================
-🌦️ WEATHER
-====================================
-
-{weather}
-
-====================================
-✈️ FLIGHT DETAILS
-====================================
-
-Airline : {flight_airline}
-
-Price   : ₹{flight_price:,}
-
-Time    : {flight_time}
-
-====================================
-🏨 HOTEL DETAILS
-====================================
-
-Hotel            : {hotel_name}
-
-Cost Per Night   : ₹{hotel_cost:,}
-
-Total Hotel Cost : ₹{hotel_cost * int(days):,}
-
-====================================
-💰 BUDGET REPORT
-====================================
-
-Total Budget  : ₹{budget:,}
-
-Total Expense : ₹{budget_report["expense"]:,}
-
-Remaining     : ₹{budget_report["remaining"]:,}
-
-{ai_content}
-
-====================================
-🤖 POWERED BY GOOGLE GEMINI & GROQ
-====================================
-"""
-
-    return result
-
+        budget = int(budget_input.replace(",", ""))
+    except:
+        budget = 20000
+    interests = st.text_area("🎯 Interests", placeholder="e.g. beaches, food, adventure")
 
 # ============================================
-# CHATBOT FUNCTION
+# MAIN UI
 # ============================================
+st.title("🌍 Traveling AI Agent")
+st.caption("AI Powered Smart Travel Planner - Built with Gemini & Groq")
 
-async def chatbot(message, history):
-
-    response = await asyncio.to_thread(ask_ai, message)
-
-    if history is None:
-        history = []
-
-    history.append({
-        "role": "user",
-        "content": message
-    })
-
-    history.append({
-        "role": "assistant",
-        "content": response
-    })
-
-    return "", history
-
-async def generate_trip_pdf(
-    username,
-    source,
-    destination,
-    days,
-    budget,
-    interests
-):
-    result = await travel_planner(
-        username,
-        source,
-        destination,
-        days,
-        budget,
-        interests
-    )
-
-    pdf_file = await asyncio.to_thread(generate_pdf, result)
-    return pdf_file
-
+tab1, tab2 = st.tabs(["✈️ Travel Planner", "🤖 AI Chatbot"])
 
 # ============================================
-# GRADIO UI
+# TAB 1: TRAVEL PLANNER
 # ============================================
+with tab1:
+    if st.button("🚀 Generate Complete Travel Plan"):
+        if not source or not destination:
+            st.warning("⚠️ Please enter both Source and Destination in the sidebar.")
+        else:
+            with st.spinner("🚢 Planning your trip..."):
+                # Save to memory
+                save_memory(username, {"destination": destination, "interests": interests, "budget": budget})
+                
+                # Run agents
+                loop = asyncio.new_event_loop()
+                asyncio.set_event_loop(loop)
+                results = loop.run_until_complete(get_travel_data(source, destination, days, interests))
+                
+                weather = results[0] if not isinstance(results[0], Exception) else "Weather unavailable"
+                hotels = results[1] if not isinstance(results[1], Exception) else []
+                flights = results[2] if not isinstance(results[2], Exception) else []
+                ai_content = results[3] if not isinstance(results[3], Exception) else "No travel details available"
 
-css_code = """
-.container { max-width: 900px; margin: auto; padding-top: 20px; }
-.gr-button { border-radius: 8px; transition: all 0.3s ease; }
-.gr-button:hover { transform: translateY(-2px); box-shadow: 0 4px 12px rgba(0,0,0,0.1); }
-.gr-form { border-radius: 12px; background: rgba(255,255,255,0.05); padding: 20px; }
-"""
+                # Process results
+                hotel = hotels[0] if hotels else {"name": "Not Found", "price_per_night": 0}
+                flight = flights[0] if flights else {"airline": "N/A", "price": 0, "time": "N/A"}
+                
+                budget_report = calculate_budget(budget, hotel.get("price_per_night", 0) * int(days), flight.get("price", 0))
 
-async def generate_map_async(destination):
-    return await asyncio.to_thread(generate_map, destination)
+                # ============================================
+                # PREMIUM RESULTS DASHBOARD
+                # ============================================
+                st.markdown("### 📊 Your Trip Dashboard")
+                
+                col1, col2, col3 = st.columns(3)
+                
+                with col1:
+                    st.markdown(f"""
+                    <div class="report-card">
+                        <h4>🌦️ Weather</h4>
+                        <h2 style="color: #00d4ff;">{weather}</h2>
+                        <p style="font-size: 0.8em; color: #888;">Condition & Temperature</p>
+                    </div>
+                    """, unsafe_allow_html=True)
+                
+                with col2:
+                    hotel_name = hotel.get("name", "Not Found")
+                    st.markdown(f"""
+                    <div class="report-card">
+                        <h4>🏨 Top Hotel</h4>
+                        <h2 style="color: #ffaa00;">{hotel_name[:15]}...</h2>
+                        <p style="font-size: 0.8em; color: #888;">₹{hotel.get('price_per_night', 0):,} per night</p>
+                    </div>
+                    """, unsafe_allow_html=True)
 
-with gr.Blocks(
-    title="Traveling AI Agent"
-) as app:
+                with col3:
+                    st.markdown(f"""
+                    <div class="report-card">
+                        <h4>💰 Remaining</h4>
+                        <h2 style="color: #4CAF50;">₹{budget_report['remaining']:,}</h2>
+                        <p style="font-size: 0.8em; color: #888;">From total budget</p>
+                    </div>
+                    """, unsafe_allow_html=True)
 
-    gr.Markdown("""
-# 🌍 Traveling AI Agent
+                st.divider()
 
-### AI Powered Smart Travel Planner
+                # Detailed Sections
+                c1, c2 = st.columns([1, 1])
 
-Plan smarter trips using:
-- ✈️ Real Flights
-- 🏨 Hotel Recommendations
-- 🌦 Live Weather
-- 💰 Budget Planning
-- 🧠 AI Travel Suggestions
-""")
-    # ============================================
-    # TRAVEL PLANNER TAB
-    # ============================================
+                with c1:
+                    st.markdown("#### ✈️ Flight Options")
+                    if flights:
+                        for f in flights[:2]:
+                            with st.container(border=True):
+                                st.write(f"**{f.get('airline')}**")
+                                st.write(f"🕒 {f.get('time')} | 🏷️ ₹{f.get('price', 0):,}")
+                                st.button(f"Book {f.get('airline')}", key=f"btn_{f.get('airline')}_{f.get('price')}")
+                    else:
+                        st.info("No flights found for this route.")
 
-    with gr.Tab("✈️ Travel Planner"):
+                with c2:
+                    st.markdown("#### 🏨 Hotel Details")
+                    if hotels:
+                        for h in hotels[:2]:
+                            with st.container(border=True):
+                                st.write(f"**{h.get('name')}**")
+                                st.write(f"⭐ {h.get('stars')} Stars | 🏷️ ₹{h.get('price_per_night', 0):,}")
+                                st.link_button("View on Booking.com", h.get("booking_link", "https://www.booking.com"))
+                    else:
+                        st.info("No hotels found in this city.")
 
-        with gr.Row(): 
-            username = gr.Textbox(
-                label="👤 Username",
-                placeholder="Enter your name"
-            )
+                st.divider()
+                
+                # Full Itinerary
+                st.markdown(f"### 📅 {days}-Day Itinerary & Recommendations")
+                st.markdown(f"""
+                <div style="background-color: #1e2130; padding: 25px; border-radius: 15px; border: 1px solid #3e4259;">
+                    {ai_content}
+                </div>
+                """, unsafe_allow_html=True)
+                
+                st.divider()
+                
+                # Download and Map
+                col_a, col_b = st.columns(2)
+                with col_a:
+                    st.markdown("#### 📄 Export Plan")
+                    report_text = f"Destination: {destination}\nWeather: {weather}\nHotel: {hotel.get('name')}\nBudget Status: {budget_report['remaining']}\n\n{ai_content}"
+                    pdf_path = generate_pdf(report_text)
+                    with open(pdf_path, "rb") as f:
+                        st.download_button("Download PDF Report", f, file_name="travel_plan.pdf")
+                
+                with col_b:
+                    st.markdown("#### 🗺️ Interactive Map")
+                    map_path = generate_map(destination)
+                    if map_path:
+                        st.success("Map Generated! (See below)")
 
-            source = gr.Textbox(
-                label="🛫 Source City",
-                placeholder="e.g. Mumbai"
-            )
-
-            destination = gr.Textbox(
-                label="📍 Destination City",
-                placeholder="e.g. Goa"
-            )
-
-        with gr.Row():
-            days = gr.Slider(
-                minimum=1,
-                maximum=15,
-                value=3,
-                step=1,
-                label="📅 Number of Days"
-            )
-
-            budget = gr.Number(
-                label="💰 Total Budget (₹)",
-                value=20000
-            )
-
-        interests = gr.Textbox(
-            label="🎯 Interests",
-            placeholder="e.g. beaches, food, adventure"
-        )
-
-        with gr.Row():
-            generate = gr.Button(
-                "🚀 Generate Travel Plan",
-                variant="primary",
-                scale=2
-            )
-            
-            pdf_btn = gr.Button(
-                "📄 Download PDF",
-                variant="secondary",
-                scale=1
-            )
-            
-            map_btn = gr.Button(
-                "🗺️ Generate Map",
-                variant="secondary",
-                scale=1
-            )
-
-        output = gr.Textbox(
-            label="📋 Travel Plan",
-            lines=25
-        )
-
-        with gr.Row():
-            pdf_output = gr.File(label="Travel Plan PDF")
-            map_output = gr.File(label="Interactive Map")
-
-    generate.click(
-    fn=travel_planner,
-    inputs=[
-        username,
-        source,
-        destination,
-        days,
-        budget,
-        interests
-    ],
-    outputs=output
-    )   
-
-    pdf_btn.click(
-    fn=generate_trip_pdf,
-    inputs=[
-        username,
-        source,
-        destination,
-        days,
-        budget,
-        interests
-    ],
-    outputs=pdf_output
-    ) 
-
-    map_btn.click(
-    fn=generate_map_async,
-    inputs=[destination],
-    outputs=map_output
-    )
-
-    # ============================================
-    # CHATBOT TAB
-    # ============================================
-
-    with gr.Tab("🤖 AI Travel Chatbot"):
-
-        chatbot_ui = gr.Chatbot(
-            label="Travel Assistant",
-            height=450
-        )
-
-        with gr.Row():
-
-            msg = gr.Textbox(
-                placeholder="Ask about travel...",
-                scale=4
-            )
-
-            send_btn = gr.Button(
-                "Send",
-                scale=1
-            )
-
-        clear_btn = gr.Button(
-            "🗑️ Clear Chat"
-        )
-
-        msg.submit(
-            chatbot,
-            [msg, chatbot_ui],
-            [msg, chatbot_ui]
-        )
-
-        send_btn.click(
-            chatbot,
-            [msg, chatbot_ui],
-            [msg, chatbot_ui]
-        )
-
-        clear_btn.click(
-            fn=lambda: ([], ""),
-            inputs=None,
-            outputs=[chatbot_ui, msg]
-        )
-
-
+                # Display Map if exists
+                if map_path and os.path.exists(map_path):
+                    with open(map_path, 'r', encoding='utf-8') as f:
+                        st.components.v1.html(f.read(), height=500)
 
 # ============================================
-# RUN APP
+# TAB 2: CHATBOT
 # ============================================
+with tab2:
+    st.markdown("### 🤖 Travel Assistant")
+    
+    if "messages" not in st.session_state:
+        st.session_state.messages = []
 
-if __name__ == "__main__":
+    for message in st.session_state.messages:
+        with st.chat_message(message["role"]):
+            st.markdown(message["content"])
 
-    app.launch(
-        share=False,
-        show_error=True,
-        theme=gr.themes.Soft(),
-        css=css_code
-    )
+    if prompt := st.chat_input("Ask me about your trip..."):
+        st.session_state.messages.append({"role": "user", "content": prompt})
+        with st.chat_message("user"):
+            st.markdown(prompt)
+
+        with st.chat_message("assistant"):
+            with st.spinner("Thinking..."):
+                response = ask_ai(prompt)
+                st.markdown(response)
+                st.session_state.messages.append({"role": "assistant", "content": response})
+
+st.divider()
+st.markdown("<center><b>🤖 POWERED BY GOOGLE GEMINI & GROQ</b></center>", unsafe_allow_html=True)
